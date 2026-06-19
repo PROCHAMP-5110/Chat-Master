@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Chat App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background-color: #111; color: #fff; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    #login-frame { position: fixed; inset: 0; background: #111; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .login-card { background: #222; padding: 30px; border-radius: 8px; width: 340px; border: 1px solid #333; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    .login-card h2 { color: #ffcc00; font-size: 22px; margin-bottom: 20px; }
+    .login-card input { width: 100%; padding: 12px; margin-bottom: 12px; background: #333; border: 1px solid #444; color: #fff; border-radius: 4px; outline: none; font-size: 14px; }
+    .login-card input:focus { border-color: #ff3333; }
+    .login-btn { width: 100%; padding: 12px; background: #ff3333; color: #fff; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 10px;}
+    .login-btn:hover { background: #e62e2e; }
+    .signup-text { font-size: 12px; color: #aaa; margin-top: 15px; }
+    .signup-text span { color: #ffcc00; font-weight: bold; cursor: pointer; }
+    .app-container { display: flex; flex: 1; height: 100vh; width: 100%; overflow: hidden; }
+    aside { width: 300px; background: #1a1a1a; border-right: 1px solid #333; display: flex; flex-direction: column; }
+    .profile-section { padding: 15px; border-bottom: 1px solid #333; font-size: 13px; color: #aaa; }
+    #my-profile-name { color: #ffcc00; font-weight: bold; }
+    .search-section { padding: 15px; border-bottom: 1px solid #333; display: flex; gap: 8px; }
+    .search-section input { flex: 1; padding: 8px; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px; font-size: 12px; outline: none; }
+    .add-btn { background: #ff3333; color: #fff; border: none; padding: 0 12px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+    .sidebar-title { padding: 15px 15px 5px 15px; font-size: 13px; font-weight: bold; color: #888; text-transform: uppercase; }
+    #channels-list { flex: 1; overflow-y: auto; padding: 10px; }
+    .channel-item { padding: 12px; background: #222; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; justify-content: space-between; transition: 0.2s; }
+    .channel-item.active { background: #ff3333; border-color: #ff5555; }
+    .channel-left { display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; background: #00ff66; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #00ff66; }
+    .delete-ch-btn { background: none; border: none; color: #666; font-size: 16px; cursor: pointer; font-weight: bold; padding: 0 4px; }
+    .delete-ch-btn:hover { color: #ff3333; }
+    .no-chats { text-align: center; color: #555; font-size: 12px; padding-top: 20px; }
+    main { flex: 1; display: flex; flex-direction: column; background: #141414; }
+    header { height: 56px; border-bottom: 1px solid #333; background: #1a1a1a; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+    #active-header { font-weight: bold; color: #ffcc00; font-size: 15px; display: none; width: 100%; justify-content: space-between; align-items: center; }
+    #idle-header { color: #555; font-size: 13px; }
+    #chat-feed-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    #typing-bar { font-size: 11px; color: #ffcc00; padding: 2px 24px; font-style: italic; min-height: 16px; }
+    .vanish-toggle-btn { background: #222; color: #aaa; border: 1px solid #444; font-size: 11px; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+    .vanish-toggle-btn.active { background: #ba00ff; color: #fff; border-color: #df8eff; box-shadow: 0 0 8px #ba00ff; }
+    .msg-wrap { display: flex; flex-direction: column; width: 100%; position: relative; }
+    .msg-wrap.me { align-items: flex-end; }
+    .msg-wrap.them { align-items: flex-start; }
+    .msg-meta { font-size: 10px; color: #555; margin-bottom: 2px; padding: 0 4px; }
+    .bubble-container { display: flex; align-items: center; gap: 8px; max-width: 65%; position: relative; }
+    .msg-wrap.me .bubble-container { flex-direction: row-reverse; }
+    .msg-bubble { padding: 10px 14px; border-radius: 8px; font-size: 14px; word-wrap: break-word; line-height: 1.4; width: 100%; position: relative; }
+    .msg-wrap.me .msg-bubble { background: #ff3333; color: #fff; border-top-right-radius: 0; }
+    .msg-wrap.them .msg-bubble { background: #333; color: #fff; border: 1px solid #444; border-top-left-radius: 0; }
+    .msg-wrap.vanish-msg .msg-bubble { background: #1f002e !important; border: 1px dashed #ba00ff !important; color: #f3d5ff !important; }
+    .vanish-timer { font-size: 9px; color: #ba00ff; margin-top: 2px; font-weight: bold; }
+    .reaction-bar { display: none; position: absolute; top: -24px; background: #222; border: 1px solid #444; border-radius: 20px; padding: 2px 6px; gap: 4px; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
+    .bubble-container:hover .reaction-bar { display: flex; }
+    .react-opt { cursor: pointer; font-size: 14px; transition: transform 0.1s; padding: 0 2px; }
+    .react-opt:hover { transform: scale(1.3); }
+    .applied-reaction { position: absolute; bottom: -10px; right: 10px; background: #2a2a2a; border: 1px solid #444; border-radius: 10px; padding: 1px 4px; font-size: 11px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+    .msg-wrap.them .applied-reaction { left: 10px; right: auto; }
+    .shared-img { max-width: 100%; border-radius: 4px; margin-top: 4px; display: block; max-height: 200px; object-fit: cover; }
+    footer { padding: 15px; background: #1a1a1a; border-top: 1px solid #333; }
+    #message-form { display: flex; gap: 10px; max-width: 900px; margin: 0 auto; width: 100%; align-items: center; }
+    #message-form.disabled { opacity: 0.3; pointer-events: none; }
+    #message-text-input { flex: 1; padding: 12px; background: #333; border: 1px solid #444; border-radius: 4px; color: #fff; outline: none; font-size: 14px; }
+    .media-label { background: #222; border: 1px solid #444; padding: 10px 14px; border-radius: 4px; cursor: pointer; color: #aaa; font-weight: bold; font-size: 14px; }
+    .media-label:hover { border-color: #ff3333; color: #fff; }
+    .send-btn { background: #ff3333; color: #fff; font-weight: bold; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="login-frame">
+    <div class="login-card">
+      <h2 id="form-title">Log in to Chat</h2>
+      <form id="login-form">
+        <input type="text" id="username-input" placeholder="__PROCHAMP__" required autocomplete="off">
+        <input type="password" id="password-input" placeholder="Password" required>
+        <button type="submit" id="submit-btn" class="login-btn">Log In</button>
+      </form>
+      <p class="signup-text" id="toggle-text">Don't have an account? <span id="switch-mode">Sign up</span></p>
+    </div>
+  </div>
+  <div class="app-container">
+    <aside>
+      <div class="profile-section">
+        <h4>Profile: <span id="my-profile-name">...</span></h4>
+      </div>
+      <div class="search-section">
+        <form id="add-peer-form" style="display:flex; width:100%; gap:8px;">
+          <input type="text" id="peer-search-input" placeholder="Start chat with username..." required autocomplete="off">
+          <button type="submit" class="add-btn">+</button>
+        </form>
+      </div>
+      <div class="sidebar-title">Active Channels</div>
+      <div id="channels-list">
+        <p class="no-chats">No active chat sessions.</p>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div id="active-header">
+          <div>Chat Room with: <span id="chat-partner-title"></span></div>
+          <          <button id="vanish-toggle" class="vanish-toggle-btn" onclick="toggleVanishMode()">🤫 Vanish Mode: OFF</button>
+>🤫 Vanish Mode: OFF</button>
+        </div>
+        <div id="idle-header">Select or add a username from the sidebar channel list to open a private message stream.</div>
+      </header>
+      <div id="chat-feed-box"></div>
+      <div id="typing-bar"></div>
+      <footer>
+        <form id="message-form" class="disabled">
+          <label class="media-label" title="Attach Image">📁 <input type="file" id="media-input" accept="image/*" class="hidden"></label>
+          <input type="text" id="message-text-input" placeholder="Select a peer to unlock message box..." required autocomplete="off">
+          <button type="submit" class="send-btn">Send</button>
+        </form>
+      </footer>
+    </main>
+  </div>
+  <script>
+    let localUser = ''; let activePeer = null; let isRegisterMode = false; let typingTimeout = null; let vanishModeActive = false;
+    const loginFrame = document.getElementById('login-frame'); const loginForm = document.getElementById('login-form');
+    const usernameInput = document.getElementById('username-input'); const passwordInput = document.getElementById('password-input');
+    const myProfileName = document.getElementById('my-profile-name'); const addPeerForm = document.getElementById('add-peer-form');
+    const peerSearchInput = document.getElementById('peer-search-input'); const channelsList = document.getElementById('channels-list');
+    const activeHeader = document.getElementById('active-header'); const idleHeader = document.getElementById('idle-header');
+    const chatPartnerTitle = document.getElementById('chat-partner-title'); const chatFeedBox = document.getElementById('chat-feed-box');
+const messageForm = document.getElementById('message-form'); const messageTextInput = document.getElementById('message-text-input');const mediaInput = document.getElementById('media-input'); const typingBar = document.getElementById('typing-bar');const vanishToggle = document.getElementById('vanish-toggle'); const formTitle = document.getElementById('form-title');const submitBtn = document.getElementById('submit-btn'); const toggleText = document.getElementById('toggle-text');const switchMode = document.getElementById('switch-mode');vanishToggle.addEventListener('click', function() {vanishModeActive = !vanishModeActive;if (vanishModeActive) { vanishToggle.innerText = '🤫 Vanish Mode: ON'; vanishToggle.className = 'vanish-toggle-btn active'; }else { vanishToggle.innerText = '🤫 Vanish Mode: OFF'; vanishToggle.className = 'vanish-toggle-btn'; }});switchMode.addEventListener('click', function() {isRegisterMode = !isRegisterMode;if (isRegisterMode) { formTitle.innerText = 'Create Account'; submitBtn.innerText = 'Register'; toggleText.innerHTML = 'Already have an account? Log In'; }else { formTitle.innerText = 'Log in to Chat'; submitBtn.innerText = 'Log In'; toggleText.innerHTML = "Don't have an account? Sign up"; }document.getElementById('toggle-text').querySelector('span').addEventListener('click', function() { switchMode.click(); });});loginForm.addEventListener('submit', function(e) {e.preventDefault(); const userVal = usernameInput.value.trim().toLowerCase(); const passVal = passwordInput.value.trim();let databaseUsers = JSON.parse(localStorage.getItem('app_registered_users')) || {};if (isRegisterMode) {if (databaseUsers[userVal]) { alert('This username is already taken!'); return; }databaseUsers[userVal] = passVal; localStorage.setItem('app_registered_users', JSON.stringify(databaseUsers));alert('Registration complete! Log in now.'); switchMode.click();} else {if (!databaseUsers[userVal] || databaseUsers[userVal] !== passVal) { alert('Invalid credentials.'); return; }localUser = userVal; myProfileName.innerText = localUser.toUpperCase(); loginFrame.style.display = 'none';localStorage.setItem('status_' + localUser, 'online'); loadChannels(); startSimulatedUpdateEngine();}});addPeerForm.addEventListener('submit', function(e) {e.preventDefault(); const targetPeer = peerSearchInput.value.trim().toLowerCase();let databaseUsers = JSON.parse(localStorage.getItem('app_registered_users')) || {};if (!targetPeer || targetPeer === localUser) { peerSearchInput.value = ''; return; }if (!databaseUsers[targetPeer]) { alert('User does not exist.'); peerSearchInput.value = ''; return; }openChatRoom(targetPeer); peerSearchInput.value = '';});function openChatRoom(peerName) {activePeer = peerName; idleHeader.className = 'hidden'; activeHeader.style.display = 'flex';chatPartnerTitle.innerText = activePeer.toUpperCase(); messageForm.className = '';messageTextInput.placeholder = 'Type private text...'; saveChannel(peerName); loadChannels(); loadMessages();}function saveChannel(peerName) {let channels = JSON.parse(localStorage.getItem('chats_' + localUser)) || [];if (!channels.includes(peerName)) { channels.push(peerName); localStorage.setItem('chats_' + localUser, JSON.stringify(channels)); }}function deleteChannel(peerName, event) {event.stopPropagation(); let channels = JSON.parse(localStorage.getItem('chats_' + localUser)) || [];channels = channels.filter(function(ch) { return ch !== peerName; }); localStorage.setItem('chats_' + localUser, JSON.stringify(channels));if(activePeer === peerName) { activePeer = null; activeHeader.style.display = 'none'; idleHeader.className = ''; messageForm.className = 'disabled'; chatFeedBox.innerHTML = ''; }loadChannels();}function loadChannels() {let channels = JSON.parse(localStorage.getItem('chats_' + localUser)) || [];if (channels.length === 0) { channelsList.innerHTML = 'No active chat sessions.'; return; }channelsList.innerHTML = '';channels.forEach(function(ch) {const isOnline = localStorage.getItem('status_' + ch) === 'online'; const div = document.createElement('div');div.className = 'channel-item ' + (activePeer === ch ? 'active' : ''); div.onclick = function() { openChatRoom(ch); };div.innerHTML = "" + (isOnline ? "" : "⚪") + " " + ch.toUpperCase() + "×";channelsList.appendChild(div);});}messageTextInput.addEventListener('input', function() {if (!activePeer) return; localStorage.setItem('typing_' + localUser + 'to' + activePeer, 'true');clearTimeout(typingTimeout); typingTimeout = setTimeout(function() { localStorage.removeItem('typing_' + localUser + 'to' + activePeer); }, 1500);});messageForm.addEventListener('submit', function(e) {e.preventDefault(); const txt = messageTextInput.value.trim(); const file = mediaInput.files;if (!txt && !file.length) return;if (file.length) { const reader = new FileReader(); reader.onload = function(event) { saveAndSendPacket(txt, event.target.result); }; reader.readAsDataURL(file); }else { saveAndSendPacket(txt, null); }});function saveAndSendPacket(text, imgStringData) {const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); const id = 'msg_' + Date.now();const msgPacket = { id: id, sender: localUser, text: text, image: imgStringData, time: time, vanish: vanishModeActive, reaction: '' };const roomKey = [localUser, activePeer].sort().join('room');let msgs = JSON.parse(localStorage.getItem(roomKey)) || []; msgs.push(msgPacket); localStorage.setItem(roomKey, JSON.stringify(msgs));let receiverChats = JSON.parse(localStorage.getItem('chats_' + activePeer)) || [];if (!receiverChats.includes(localUser)) { receiverChats.push(localUser); localStorage.setItem('chats_' + activePeer, JSON.stringify(receiverChats)); }messageTextInput.value = ''; mediaInput.value = ''; localStorage.removeItem('typing_' + localUser + 'to' + activePeer); loadMessages();}function addReaction(msgId, emoji) {const roomKey = [localUser, activePeer].sort().join('room'); let msgs = JSON.parse(localStorage.getItem(roomKey)) || [];msgs = msgs.map(function(m) { return m.id === msgId ? { sender: m.sender, text: m.text, image: m.image, time: m.time, vanish: m.vanish, id: m.id, reaction: emoji } : m; }); localStorage.setItem(roomKey, JSON.stringify(msgs)); loadMessages();}function triggerVanishCountdown(msgId, roomKey) {setTimeout(function() {let msgs = JSON.parse(localStorage.getItem(roomKey)) || []; msgs = msgs.filter(function(m) { return m.id !== msgId; });localStorage.setItem(roomKey, JSON.stringify(msgs)); if (activePeer) loadMessages();}, 10000);}function loadMessages() {if (!activePeer) return; const roomKey = [localUser, activePeer].sort().join('room'); let msgs = JSON.parse(localStorage.getItem(roomKey)) || [];chatFeedBox.innerHTML = '';msgs.forEach(function(msg) {const isMe = msg.sender === localUser; const wrap = document.createElement('div');wrap.className = 'msg-wrap ' + (isMe ? 'me' : 'them') + ' ' + (msg.vanish ? 'vanish-msg' : '');let bubbleContent = msg.text; if (msg.image) bubbleContent += "";let vanishBar = '';if (msg.vanish) {vanishBar = "⏳ Vanishing in 10s...";if (!msg.countdownTriggered) { msg.countdownTriggered = true; localStorage.setItem(roomKey, JSON.stringify(msgs)); triggerVanishCountdown(msg.id, roomKey); }}let reactBadge = msg.reaction ? "" + msg.reaction + "" : '';wrap.innerHTML = "" + msg.sender.toUpperCase() + " • " + msg.time + "❤️👍😂😮" + bubbleContent + reactBadge + "" + vanishBar;chatFeedBox.appendChild(wrap);});chatFeedBox.scrollTop = chatFeedBox.scrollHeight;}function startSimulatedUpdateEngine() {setInterval(function() {loadChannels();if (activePeer) {const isPeerTyping = localStorage.getItem('typing_' + activePeer + 'to' + localUser) === 'true';typingBar.innerText = isPeerTyping ? activePeer.toUpperCase() + ' is typing...' : '';loadMessages();}}, 1000);}window.addEventListener('beforeunload', function() { if(localUser) localStorage.removeItem('status_' + localUser); });
+    vanishToggle.addEventListener('click', function() {
+      vanishModeActive = !vanishModeActive;
+      if (vanishModeActive) { vanishToggle.innerText = '🤫 Vanish Mode: ON'; vanishToggle.className = 'vanish-toggle-btn active'; } 
+      else { vanishToggle.innerText = '🤫 Vanish Mode: OFF'; vanishToggle.className = 'vanish-toggle-btn'; }
+    });
+    switchMode.addEventListener('click', function() {
+      isRegisterMode = !isRegisterMode;
+      if (isRegisterMode) { formTitle.innerText = 'Create Account'; submitBtn.innerText = 'Register'; toggleText.innerHTML = 'Already have an account? <span>Log In</span>'; } 
+      else { formTitle.innerText = 'Log in to Chat'; submitBtn.innerText = 'Log In'; toggleText.innerHTML = "Don't have an account? <span>Sign up</span>"; }
+      document.getElementById('toggle-text').querySelector('span').addEventListener('click', function() { switchMode.click(); });
+    });
+    loginForm.addEventListener('submit', function(e) {
+      e.preventDefault(); const userVal = usernameInput.value.trim().toLowerCase(); const passVal = passwordInput.value.trim();
+      let databaseUsers = JSON.parse(localStorage.getItem('app_registered_users')) || {};
+      if (isRegisterMode) {
+        if (databaseUsers[userVal]) { alert('This username is already taken!'); return; }
+        databaseUsers[userVal] = passVal; localStorage.setItem('app_registered_users', JSON.stringify(databaseUsers));
+        alert('Registration complete! Log in now.'); switchMode.click();
+      } else {
+        if (!databaseUsers[userVal] || databaseUsers[userVal] !== passVal) { alert('Invalid credentials.'); return; }
+        localUser = userVal; myProfileName.innerText = localUser.toUpperCase(); loginFrame.style.display = 'none';
+        localStorage.setItem('status_' + localUser, 'online'); loadChannels(); startSimulatedUpdateEngine();
+      }
+    });
+    addPeerForm.addEventListener('submit', function(e) {
+      e.preventDefault(); const targetPeer = peerSearchInput.value.trim().toLowerCase();
+      let databaseUsers = JSON.parse(localStorage.getItem('app_registered_users')) || {};
+      if (!targetPeer || targetPeer === localUser) { peerSearchInput.value = ''; return; }
+      if (!databaseUsers[targetPeer]) { alert('User does not exist.'); peerSearchInput.value = ''; return; }
+      openChatRoom(targetPeer); peerSearchInput.value = '';
+    });
+    function openChatRoom(peerName) {
+      activePeer = peerName; idleHeader.className = 'hidden'; activeHeader.style.display = 'flex';
+      chatPartnerTitle.innerText = activePeer.toUpperCase(); messageForm.className = '';
+      messageTextInput.placeholder = 'Type private text...'; saveChannel(peerName); loadChannels(); loadMessages();
+    }
+    function saveChannel(peerName) {
+      let channels = JSON.parse(localStorage.getItem('chats_' + localUser)) || [];
+      if (!channels.includes(peerName)) { channels.push(peerName); localStorage.setItem('chats_' + localUser, JSON.stringify(channels)); }
+    }
+    function deleteChannel(peerName, event) {
+      event.stopPropagation(); let channels = JSON.parse(localStorage.getItem('chats_' + localUser)) || [];
+      channels = channels.filter(function(ch) { return ch !== peerName; }); localStorage.setItem('chats_' + localUser, JSON.stringify(channels));
+      if(activePeer === peerName) { activePeer = null; activeHeader.style.display = 'none'; idleHeader.className = ''; messageForm.className = 'disabled'; chatFeedBox.innerHTML = ''; }
+      loadChannels();
+    }
+    function loadChannels() {
+      let channels = JSON.parse(localStorage.getItem('chats_' + localUser)) || [];
+      if (channels.length === 0) { channelsList.innerHTML = '<p class="no-chats">No active chat sessions.</p>'; return; }
+      channelsList.innerHTML = '';
+      channels.forEach(function(ch) {
+        const isOnline = localStorage.getItem('status_' + ch) === 'online'; const div = document.createElement('div');
+        div.className = 'channel-item ' + (activePeer === ch ? 'active' : ''); div.onclick = function() { openChatRoom(ch); };
+        div.innerHTML = "<div class='channel-left'>" + (isOnline ? "<span class='status-dot'></span>" : "⚪") + " <strong>" + ch.toUpperCase() + "</strong></div><button class='delete-ch-btn' onclick='deleteChannel(\"" + ch + "\", event)'>×</button>";
+        channelsList.appendChild(div);
+      });
+    }
+    messageTextInput.addEventListener('input', function() {
+      if (!activePeer) return; localStorage.setItem('typing_' + localUser + '_to_' + activePeer, 'true');
+      clearTimeout(typingTimeout); typingTimeout = setTimeout(function() { localStorage.removeItem('typing_' + localUser + '_to_' + activePeer); }, 1500);
+    });
+    messageForm.addEventListener('submit', function(e) {
+      e.preventDefault(); const txt = messageTextInput.value.trim(); const file = mediaInput.files;
+      if (!txt && !file.length) return;
+      if (file.length) { const reader = new FileReader(); reader.onload = function(event) { saveAndSendPacket(txt, event.target.result); }; reader.readAsDataURL(file); } 
+      else { saveAndSendPacket(txt, null); }
+    });
+    function saveAndSendPacket(text, imgStringData) {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); const id = 'msg_' + Date.now();
+      const msgPacket = { id: id, sender: localUser, text: text, image: imgStringData, time: time, vanish: vanishModeActive, reaction: '' };
+      const roomKey = [localUser, activePeer].sort().join('_room_');
+      let msgs = JSON.parse(localStorage.getItem(roomKey)) || []; msgs.push(msgPacket); localStorage.setItem(roomKey, JSON.stringify(msgs));
+      let receiverChats = JSON.parse(localStorage.getItem('chats_' + activePeer)) || [];
+      if (!receiverChats.includes(localUser)) { receiverChats.push(localUser); localStorage.setItem('chats_' + activePeer, JSON.stringify(receiverChats)); }
+      messageTextInput.value = ''; mediaInput.value = ''; localStorage.removeItem('typing_' + localUser + '_to_' + activePeer); loadMessages();
+    }
+    function addReaction(msgId, emoji) {
+      const roomKey = [localUser, activePeer].sort().join('_room_'); let msgs = JSON.parse(localStorage.getItem(roomKey)) || [];
+      msgs = msgs.map(function(m) { return m.id === msgId ? { sender: m.sender, text: m.text, image: m.image, time: m.time, vanish: m.vanish, id: m.id, reaction: emoji } : m; }); localStorage.setItem(roomKey, JSON.stringify(msgs)); loadMessages();
+    }
+    function triggerVanishCountdown(msgId, roomKey) {
+      setTimeout(function() {
+        let msgs = JSON.parse(localStorage.getItem(roomKey)) || []; msgs = msgs.filter(function(m) { return m.id !== msgId; });
+        localStorage.setItem(roomKey, JSON.stringify(msgs)); if (activePeer) loadMessages();
+      }, 10000);
+    }
+    function loadMessages() {
+      if (!activePeer) return; const roomKey = [localUser, activePeer].sort().join('_room_'); let msgs = JSON.parse(localStorage.getItem(roomKey)) || [];
+      chatFeedBox.innerHTML = '';
+      msgs.forEach(function(msg) {
+        const isMe = msg.sender === localUser; const wrap = document.createElement('div');
+        wrap.className = 'msg-wrap ' + (isMe ? 'me' : 'them') + ' ' + (msg.vanish ? 'vanish-msg' : '');
+        let bubbleContent = msg.text; if (msg.image) bubbleContent += "<img src='" + msg.image + "' class='shared-img' />";
+        let vanishBar = '';
+        if (msg.vanish) {
+          vanishBar = "<span class='vanish-timer'>⏳ Vanishing in 10s...</span>";
+          if (!msg.countdownTriggered) { msg.countdownTriggered = true; localStorage.setItem(roomKey, JSON.stringify(msgs)); triggerVanishCountdown(msg.id, roomKey); }
+        }
+        let reactBadge = msg.reaction ? "<div class='applied-reaction'>" + msg.reaction + "</div>" : '';
+        wrap.innerHTML = "<span class='msg-meta'>" + msg.sender.toUpperCase() + " • " + msg.time + "</span><div class='bubble-container'><div class='reaction-bar'><span class='react-opt' onclick='addReaction(\"" + msg.id + "\", \"❤️\")'>❤️</span><span class='react-opt' onclick='addReaction(\"" + msg.id + "\", \"👍\")'>👍</span><span class='react-opt' onclick='addReaction(\"" + msg.id + "\", \"😂\")'>😂</span><span class='react-opt' onclick='addReaction(\"" + msg.id + "\", \"😮\")'>😮</span></div><div class='msg-bubble'>" + bubbleContent + reactBadge + "</div></div>" + vanishBar;
+        chatFeedBox.appendChild(wrap);
+      });
+      chatFeedBox.scrollTop = chatFeedBox.scrollHeight;
+    }
+    function startSimulatedUpdateEngine() {
+      setInterval(function() {
+        loadChannels();
+        if (activePeer) {
+          const isPeerTyping = localStorage.getItem('typing_' + activePeer + '_to_' + localUser) === 'true';
+          typingBar.innerText = isPeerTyping ? activePeer.toUpperCase() + ' is typing...' : '';
+          loadMessages();
+        }
+      }, 1000);
+    }
+    window.addEventListener('beforeunload', function() { if(localUser) localStorage.removeItem('status_' + localUser); });
+	    window.toggleVanishMode = function() {
+      vanishModeActive = !vanishModeActive;
+      const btn = document.getElementById('vanish-toggle');
+      const input = document.getElementById('message-text-input');
+      
+      if (vanishModeActive) {
+        btn.innerText = '🤫 Vanish Mode: ON';
+        btn.className = 'vanish-toggle-btn active';
+        if (input) {
+          input.style.background = '#1f002e';
+          input.style.borderColor = '#ba00ff';
+        }
+      } else {
+        btn.innerText = '🤫 Vanish Mode: OFF';
+        btn.className = 'vanish-toggle-btn';
+        if (input) {
+          input.style.background = '#333';
+          input.style.borderColor = '#444';
+        }
+      }
+    };
+
+  </script>
+</body>
+</html>
