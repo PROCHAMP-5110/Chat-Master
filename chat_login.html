@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Chat App</title>
+  <script>
+    let usersMemory = { "bot": { password: "123", rooms: ["bot%%prochamp"] } };
+    let roomsMemory = {};
+
+    const DB = {
+      getUsers: () => usersMemory,
+      saveUsers: (users) => { usersMemory = users; },
+      getSessions: () => roomsMemory,
+      saveSessions: (sessions) => { roomsMemory = sessions; }
+    };
+
+    let currentUser = null;
+    let currentActiveRoom = null;
+    let isVanishModeOn = false;
+    let simulateTypingTimer = null;
+    let isSignUpMode = false;
+    let mediaRecorderEngine = null;
+    let audioChunksArray = [];
+    let stateThemeMode = "dark";
+  </script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background-color: #111; color: #fff; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    #login-frame { position: fixed; inset: 0; background: #111; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .login-card { background: #222; padding: 30px; border-radius: 8px; width: 340px; border: 1px solid #333; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    .login-card h2 { color: #ffcc00; font-size: 22px; margin-bottom: 20px; }
+    .login-card input { width: 100%; padding: 12px; margin-bottom: 12px; background: #333; border: 1px solid #444; color: #fff; border-radius: 4px; outline: none; font-size: 14px; }
+    .login-card input:focus { border-color: #ff3333; }
+    .login-btn { width: 100%; padding: 12px; background: #ff3333; color: #fff; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 10px;}
+    .login-btn:hover { background: #e62e2e; }
+    .signup-text { font-size: 12px; color: #aaa; margin-top: 15px; }
+    .signup-text span { color: #ffcc00; font-weight: bold; cursor: pointer; }
+    .app-container { display: flex; flex: 1; height: 100vh; width: 100%; overflow: hidden; }
+    aside { width: 300px; background: #1a1a1a; border-right: 1px solid #333; display: flex; flex-direction: column; z-index: 10; }
+    .profile-section { padding: 15px; border-bottom: 1px solid #333; font-size: 13px; color: #aaa; }
+    #my-profile-name { color: #ffcc00; font-weight: bold; }
+    .search-section { padding: 15px; border-bottom: 1px solid #333; display: flex; gap: 8px; }
+    .search-section input { flex: 1; padding: 8px; background: #222; border: 1px solid #444; color: #fff; border-radius: 4px; font-size: 12px; outline: none; }
+    .add-btn { background: #ff3333; color: #fff; border: none; padding: 0 12px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+    .sidebar-title { padding: 15px 15px 5px 15px; font-size: 13px; font-weight: bold; color: #888; text-transform: uppercase; }
+    #channels-list { flex: 1; overflow-y: auto; padding: 10px; }
+    .channel-item { padding: 12px; background: #222; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; justify-content: space-between; transition: 0.2s; }
+    .channel-item.active { background: #ff3333; border-color: #ff5555; }
+    .channel-left { display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; background: #00ff66; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #00ff66; }
+    .delete-ch-btn { background: none; border: none; color: #666; font-size: 16px; cursor: pointer; font-weight: bold; padding: 0 4px; }
+    .delete-ch-btn:hover { color: #ff3333; }
+    main { flex: 1; display: flex; flex-direction: column; background: #141414; }
+    header { height: 56px; border-bottom: 1px solid #333; background: #1a1a1a; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+    #active-header { font-weight: bold; color: #ffcc00; font-size: 15px; display: flex; width: 100%; justify-content: space-between; align-items: center; }
+    #chat-feed-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    #typing-bar { font-size: 11px; color: #ffcc00; padding: 2px 24px; font-style: italic; min-height: 16px; }
+    .vanish-toggle-btn { background: #222; color: #aaa; border: 1px solid #444; font-size: 11px; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+    .vanish-toggle-btn.active { background: #ba00ff; color: #fff; border-color: #df8eff; box-shadow: 0 0 8px #ba00ff; }
+    .msg-wrap { display: flex; flex-direction: column; width: 100%; position: relative; margin-bottom: 10px; }
+    .msg-wrap.me { align-items: flex-end; }
+    .msg-wrap.them { align-items: flex-start; }
+    .msg-meta { font-size: 10px; color: #555; margin-bottom: 2px; padding: 0 4px; }
+    .bubble-container { display: flex; align-items: center; gap: 8px; max-width: 65%; position: relative; }
+    .msg-wrap.me .bubble-container { flex-direction: row-reverse; }
+    .msg-bubble { padding: 10px 14px; border-radius: 8px; font-size: 14px; word-wrap: break-word; line-height: 1.4; width: 100%; position: relative; }
+    .msg-wrap.me .msg-bubble { background: #ff3333; color: #fff; border-top-right-radius: 0; }
+    .msg-wrap.them .msg-bubble { background: #333; color: #fff; border: 1px solid #444; border-top-left-radius: 0; }
+    .msg-wrap.vanish-msg .msg-bubble { background: #1f002e !important; border: 1px dashed #ba00ff !important; color: #f3d5ff !important; }
+    .vanish-timer { font-size: 10px; color: #ba00ff; margin-top: 4px; font-weight: bold; font-style: italic; }
+    .msg-action-bar { display: none; margin: 0 5px; gap: 8px; }
+    .bubble-container:hover .msg-action-bar { display: flex; align-items: center; }
+    .msg-del-btn { background: none; border: none; color: #555; cursor: pointer; font-size: 12px; padding: 2px; transition: 0.1s; }
+    .msg-del-btn:hover { color: #ff3333; transform: scale(1.1); }
+    footer { padding: 15px; background: #1a1a1a; border-top: 1px solid #333; }
+    #message-form { display: flex; gap: 12px; max-width: 900px; margin: 0 auto; width: 100%; align-items: center; justify-content: space-between; }
+    #message-text-input { flex: 1; padding: 12px; background: #333; border: 1px solid #444; border-radius: 4px; color: #fff; outline: none; font-size: 14px; }
+    .send-btn { background: #ff3333; color: #fff; font-weight: bold; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .media-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 0 4px; color: #888; transition: 0.2s; }
+    .media-btn:hover { color: #ff3333; transform: scale(1.1); }
+    #mic-record-btn.recording { color: #ff3333; animation: pulseMic 1s infinite; transform: scale(1.2); }
+    @keyframes pulseMic { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    body.light-theme { background-color: #f5f5f5; color: #222; }
+    body.light-theme aside { background: #e0e0e0; border-right-color: #ccc; }
+    body.light-theme main { background: #ffffff; }
+    body.light-theme header, body.light-theme footer { background: #e8e8e8; border-color: #ccc; }
+    body.light-theme .channel-item { background: #fff; border-color: #ccc; color: #222; }
+    body.light-theme .msg-wrap.them .msg-bubble { background: #e0e0e0; border-color: #ccc; color: #222; }
+    body.light-theme #message-text-input { background: #fff; border-color: #ccc; color: #222; }
+    .shared-img { max-width: 100%; border-radius: 6px; margin-top: 5px; display: block; max-height: 180px; object-fit: cover; }
+    .file-download-card { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; margin-top: 5px; text-decoration: none; color: inherit; font-size: 13px; border: 1px dashed rgba(255,255,255,0.2); }
+    .audio-player-node { margin-top: 5px; display: block; max-width: 240px; height: 32px; }
+  </style>
+</head>
+<body>
+  <div id="login-frame">
+    <div class="login-card">
+      <h2 id="form-title">Log in to Chat</h2>
+      <form id="login-form">
+        <input type="text" id="username-input" placeholder="Username" required autocomplete="off">
+        <input type="password" id="password-input" placeholder="Password" required>
+        <button type="submit" id="submit-btn" class="login-btn">Log In</button>
+      </form>
+      <p class="signup-text" id="toggle-text">Don't have an account? <span id="switch-mode" onclick="toggleAuthMode()">Sign up</span></p>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <aside>
+      <div class="profile-section">
+        <h4>Profile: <span id="my-profile-name">...</span></h4>
+      </div>
+      <div class="search-section">
+        <form id="add-peer-form" style="display:flex; width:100%; gap:8px;">
+          <input type="text" id="peer-search-input" placeholder="Start private chat..." required autocomplete="off">
+          <button type="submit" class="add-btn">+</button>
+        </form>
+      </div>
+      <div class="sidebar-title">Active Channels</div>
+      <div id="channels-list"></div>
+      <div style="padding: 15px; border-top: 1px solid #333; margin-top: auto; text-align: center;">
+        <button onclick="toggleColorTheme()" id="theme-btn" style="background:#222; color:#fff; border:1px solid #444; padding:8px 16px; border-radius:20px; font-size:12px; cursor:pointer; font-weight:bold; width:100%;">☀️ Light Mode</button>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div id="active-header">
+          <div>Chat Room with: <span id="chat-partner-title">Select a Channel</span></div>
+          <button id="toggle-vanish-btn" class="vanish-toggle-btn">Vanish Mode</button>
+        </div>
+      </header>
+      <div id="chat-feed-box"></div>
+      <div id="typing-bar"></div>
+      <footer>
+        <form id="message-form">
+          <input type="file" id="media-file-input" style="display:none;" onchange="handleFileSelection(this)">
+          <button type="button" class="media-btn" onclick="document.getElementById('media-file-input').click()">📎</button>
+          <input type="text" id="message-text-input" placeholder="Type a message..." autocomplete="off">
+          <button type="button" id="mic-record-btn" class="media-btn" onclick="toggleVoiceRecording()">🎤</button>
+          <button type="submit" class="send-btn">Send</button>
+        </form>
+      </footer>
+    </main>
+  </div>
+  <script>
+    const dom = {
+      loginFrame: document.getElementById('login-frame'),
+      formTitle: document.getElementById('form-title'),
+      authForm: document.getElementById('login-form'),
+      usernameInput: document.getElementById('username-input'),
+      passwordInput: document.getElementById('password-input'),
+      submitBtn: document.getElementById('submit-btn'),
+      toggleText: document.getElementById('toggle-text'),
+      profileName: document.getElementById('my-profile-name'),
+      addPeerForm: document.getElementById('add-peer-form'),
+      peerInput: document.getElementById('peer-search-input'),
+      channelsList: document.getElementById('channels-list'),
+      partnerTitle: document.getElementById('chat-partner-title'),
+      toggleVanishBtn: document.getElementById('toggle-vanish-btn'),
+      chatFeed: document.getElementById('chat-feed-box'),
+      typingBar: document.getElementById('typing-bar'),
+      messageForm: document.getElementById('message-form'),
+      messageInput: document.getElementById('message-text-input')
+    };
+
+    window.toggleAuthMode = function() {
+      isSignUpMode = !isSignUpMode;
+      dom.formTitle.innerText = isSignUpMode ? "Create an Account" : "Log in to Chat";
+      dom.submitBtn.innerText = isSignUpMode ? "Sign Up" : "Log In";
+      dom.toggleText.innerHTML = isSignUpMode 
+        ? `Already have an account? <span id="switch-mode" onclick="toggleAuthMode()">Log in</span>`
+        : `Don't have an account? <span id="switch-mode" onclick="toggleAuthMode()">Sign up</span>`;
+      dom.authForm.reset();
+    };
+
+    dom.authForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const username = dom.usernameInput.value.trim().toLowerCase();
+      const password = dom.passwordInput.value;
+      const users = DB.getUsers();
+
+      if (isSignUpMode) {
+        if (users[username]) return alert("Username already registered!");
+        users[username] = { password, rooms: [] };
+        DB.saveUsers(users);
+        alert("Registration complete! Please log in.");
+        toggleAuthMode();
+      } else {
+        if (!users[username] || users[username].password !== password) {
+          return alert("Invalid credentials provided.");
+        }
+        initSession(username);
+      }
+    });
+  </script>
+  <script>
+    function initSession(username) {
+      currentUser = username;
+      dom.profileName.innerText = currentUser;
+      dom.loginFrame.style.display = 'none';
+      const roomKey = ["bot", currentUser].sort().join('%%');
+      const users = DB.getUsers();
+      const sessions = DB.getSessions();
+      if (!users[currentUser].rooms.includes(roomKey)) users[currentUser].rooms.push(roomKey);
+      if (!sessions[roomKey]) sessions[roomKey] = { messages: [] };
+      DB.saveUsers(users); DB.saveSessions(sessions);
+      openChatRoom(roomKey); startDisappearingTimersSync();
+    }
+
+    dom.addPeerForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const peer = dom.peerInput.value.trim().toLowerCase();
+      if (peer === currentUser) return alert("You cannot initiate a chat room with yourself.");
+      const users = DB.getUsers();
+      if (!users[peer]) return alert("Profile name not found. Sign up that name first!");
+      const roomKey = [currentUser, peer].sort().join('%%');
+      const sessions = DB.getSessions();
+      if (!sessions[roomKey]) sessions[roomKey] = { messages: [] };
+      if (!users[currentUser].rooms.includes(roomKey)) users[currentUser].rooms.push(roomKey);
+      if (!users[peer].rooms.includes(roomKey)) users[peer].rooms.push(roomKey);
+      DB.saveUsers(users); DB.saveSessions(sessions);
+      dom.peerInput.value = ''; renderChannelsList(); openChatRoom(roomKey);
+    });
+
+    function renderChannelsList() {
+      const users = DB.getUsers();
+      const myRooms = users[currentUser]?.rooms || [];
+      dom.channelsList.innerHTML = '';
+      myRooms.forEach(roomKey => {
+        const partner = roomKey.split('%%').find(u => u !== currentUser);
+        const div = document.createElement('div');
+        div.className = `channel-item ${currentActiveRoom === roomKey ? 'active' : ''}`;
+        div.onclick = () => openChatRoom(roomKey);
+        div.innerHTML = `
+          <div class="channel-left"><span class="status-dot"></span><span>${partner}</span></div>
+          <button class="delete-ch-btn" onclick="event.stopPropagation(); closeRoom('${roomKey}')">&times;</button>
+        `;
+        dom.channelsList.appendChild(div);
+      });
+    }
+  </script>
+  <script>
+    window.closeRoom = function(roomKey) {
+      const users = DB.getUsers();
+      if(users[currentUser]) users[currentUser].rooms = users[currentUser].rooms.filter(r => r !== roomKey);
+      if (currentActiveRoom === roomKey) {
+        currentActiveRoom = null; dom.partnerTitle.innerText = "Select a Channel"; dom.chatFeed.innerHTML = '';
+      }
+      renderChannelsList();
+    };
+
+    function openChatRoom(roomKey) {
+      currentActiveRoom = roomKey;
+      const partner = roomKey.split('%%').find(u => u !== currentUser);
+      dom.partnerTitle.innerText = partner; renderChannelsList(); renderMessages();
+    }
+
+    dom.toggleVanishBtn.addEventListener('click', () => {
+      isVanishModeOn = !isVanishModeOn; dom.toggleVanishBtn.classList.toggle('active', isVanishModeOn);
+    });
+
+    dom.messageForm.addEventListener('submit', (e) => {
+      e.preventDefault(); const text = dom.messageInput.value.trim(); if (!text) return;
+      appendNewMessage(currentUser, text); dom.messageInput.value = ''; triggerPeerSimulationReply();
+    });
+
+    function appendNewMessage(sender, text) {
+      const sessions = DB.getSessions();
+      const newMsg = {
+        id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        sender, text, timestamp: Date.now(), isVanish: isVanishModeOn, vanishDuration: isVanishModeOn ? 10 : null
+      };
+      sessions[currentActiveRoom].messages.push(newMsg); DB.saveSessions(sessions); renderMessages();
+    }
+
+    window.deleteTargetMessage = function(msgId) {
+      const sessions = DB.getSessions();
+      sessions[currentActiveRoom].messages = sessions[currentActiveRoom].messages.filter(m => m.id !== msgId);
+      DB.saveSessions(sessions); renderMessages();
+    };
+
+    function renderMessages() {
+      if (!currentActiveRoom) return;
+      const sessions = DB.getSessions();
+      const messages = sessions[currentActiveRoom]?.messages || [];
+      dom.chatFeed.innerHTML = '';
+      messages.forEach(msg => {
+        const isMe = msg.sender === currentUser;
+        const msgWrap = document.createElement('div');
+        msgWrap.className = `msg-wrap ${isMe ? 'me' : 'them'} ${msg.isVanish ? 'vanish-msg' : ''}`;
+        let timerHtml = msg.isVanish ? `<div class="vanish-timer">🗑️ Disappearing in ${msg.vanishDuration}s</div>` : '';
+        msgWrap.innerHTML = `
+          <div class="msg-meta">${msg.sender}</div>
+          <div class="bubble-container">
+            <div class="msg-bubble"><div>${msg.text.includes('<') ? msg.text : escapeHtml(msg.text)}</div></div>
+            <div class="msg-action-bar"><button class="msg-del-btn" onclick="deleteTargetMessage('${msg.id}')">🗑️</button></div>
+          </div>${timerHtml}
+        `;
+        dom.chatFeed.appendChild(msgWrap);
+      });
+      dom.chatFeed.scrollTop = dom.chatFeed.scrollHeight;
+    }
+    function escapeHtml(str) { return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  </script>
+  <script>
+    function startDisappearingTimersSync() {
+      setInterval(() => {
+        const sessions = DB.getSessions(); let changeDetected = false;
+        Object.keys(sessions).forEach(roomKey => {
+          sessions[roomKey].messages = sessions[roomKey].messages.filter(msg => {
+            if (msg.isVanish) { msg.vanishDuration -= 1; changeDetected = true; return msg.vanishDuration > 0; }
+            return true;
+          });
+        });
+        if (changeDetected) { DB.saveSessions(sessions); renderMessages(); }
+      }, 1000);
+    }
+
+    function triggerPeerSimulationReply() {
+      if (simulateTypingTimer) clearTimeout(simulateTypingTimer);
+      const partner = currentActiveRoom.split('%%').find(u => u !== currentUser);
+      const sessions = DB.getSessions();
+      const currentMessages = sessions[currentActiveRoom]?.messages || [];
+      const userLastMessage = currentMessages.length > 0 ? currentMessages[currentMessages.length - 1].text.toLowerCase() : "";
+      simulateTypingTimer = setTimeout(() => {
+        dom.typingBar.innerText = `${partner} is typing...`;
+        setTimeout(() => {
+          dom.typingBar.innerText = ''; let botSmartResponse = "";
+          if (userLastMessage.includes('hello') || userLastMessage.includes('hi') || userLastMessage.includes('hey')) {
+            botSmartResponse = "Hey there! 👋 What's up? Testing out the new layout updates?";
+          } else if (userLastMessage.includes('who made you') || userLastMessage.includes('creator') || userLastMessage.includes('created you')) {
+            botSmartResponse = "You made me, ProChamp! 🛠️ You wrote my HTML markup, styled my dark themes, and configured my script modules directly inside Notepad++!";
+          } else if (userLastMessage.includes('coding language') || userLastMessage.includes('programming language')) {
+            botSmartResponse = "JavaScript, Python, C++, and Java are coding languages! They give step-by-step instructions—just like the code running this app! 💻";
+          } else if (userLastMessage.includes('name') || userLastMessage.includes('who are you')) {
+            botSmartResponse = `My name is ${partner}! I am your private local AI chatbot. 🧠`;
+          } else if (userLastMessage.includes('vanish')) {
+            botSmartResponse = "Ooh, testing Vanish Mode? ⚡ Keep an eye on my text bubble ticker—it will wipe itself out completely in 10 seconds!";
+          } else if (userLastMessage.includes('doing') || userLastMessage.includes('wht you')) {
+            botSmartResponse = "Just hanging out in your browser tabs! What are you building next? 🛠️";
+          } else if (userLastMessage.includes('voice') || userLastMessage.includes('<audio') || userLastMessage.includes('mic')) {
+            botSmartResponse = "Wow, that voice note sounded incredibly clear! 🎙️ Your microphone recording module is operating flawlessly.";
+          } else if (userLastMessage.includes('file') || userLastMessage.includes('<img') || userLastMessage.includes('📄')) {
+            botSmartResponse = "Excellent attachment upload! 📎 I've completely scanned the file metadata buffers.";
+          } else {
+            const casualReplies = ["That sounds awesome! 👍", "Haha that's hilarious! 😂", "Got it, understood perfectly.", "Tell me more right now! 🚀"];
+            botSmartResponse = casualReplies[Math.floor(Math.random() * casualReplies.length)];
+          }
+          appendNewMessage(partner, botSmartResponse);
+        }, 2000);
+      }, 1500);
+    }
+
+    window.toggleColorTheme = function() {
+      const bodyNode = document.body; const themeBtn = document.getElementById('theme-btn');
+      stateThemeMode = (stateThemeMode === "dark") ? "light" : "dark";
+      bodyNode.classList.toggle('light-theme', stateThemeMode === "light");
+      themeBtn.innerText = (stateThemeMode === "light") ? "🌙 Dark Mode" : "☀️ Light Mode";
+      themeBtn.style.background = (stateThemeMode === "light") ? "#fff" : "#222";
+      themeBtn.style.color = (stateThemeMode === "light") ? "#222" : "#fff";
+    };
+
+    window.handleFileSelection = function(inputNode) {
+      const selectedFile = inputNode.files; if (!selectedFile || selectedFile.length === 0) return;
+      const fileLoader = new FileReader();
+      fileLoader.onload = function(e) {
+        let payload = selectedFile.type.startsWith('image/') 
+          ? `<img src="${e.target.result}" class="shared-img"/>` 
+          : `<a href="${e.target.result}" download="${selectedFile.name}" class="file-download-card">📄 Download ${selectedFile.name}</a>`;
+        appendNewMessage(currentUser, payload); inputNode.value = "";
+      };
+      fileLoader.readAsDataURL(selectedFile);
+    };
+
+    window.toggleVoiceRecording = async function() {
+      const micButton = document.getElementById('mic-record-btn');
+      if (!mediaRecorderEngine || mediaRecorderEngine.state === "inactive") {
+        audioChunksArray = [];
+        try {
+          const hardwareStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorderEngine = new MediaRecorder(hardwareStream);
+          mediaRecorderEngine.ondataavailable = (e) => { if (e.data.size > 0) audioChunksArray.push(e.data); };
+          mediaRecorderEngine.onstop = () => {
+            const blobReader = new FileReader();
+            blobReader.onloadend = () => appendNewMessage(currentUser, `<audio controls src="${blobReader.result}" class="audio-player-node"></audio>`);
+            blobReader.readAsDataURL(new Blob(audioChunksArray, { type: 'audio/webm' }));
+            hardwareStream.getTracks().forEach(track => track.stop());
+          };
+          mediaRecorderEngine.start(); micButton.classList.add('recording');
+        } catch (err) { alert("Microphone stream blocked!"); }
+      } else { mediaRecorderEngine.stop(); micButton.classList.remove('recording'); }
+    };
+  </script>
+</body>
+</html>
